@@ -1,4 +1,3 @@
-use anyhow::anyhow;
 use futures::{Stream, StreamExt};
 use reqwest::Client;
 use serde_json::{json, Value};
@@ -11,7 +10,7 @@ use crate::tools::Tool;
 pub struct Agent {
     api_key: String,
     model: String,
-    tools: Vec<Box<dyn Tool>>,
+    tools: Arc<Vec<Box<dyn Tool>>>,
     history: Vec<Message>,
     client: Client,
 }
@@ -21,7 +20,7 @@ impl Agent {
         Self {
             api_key,
             model,
-            tools,
+            tools: Arc::new(tools),
             history: Vec::new(),
             client: Client::new(),
         }
@@ -43,12 +42,7 @@ impl Agent {
 
         let api_key = self.api_key.clone();
         let model = self.model.clone();
-        // Since Agent doesn't implement Clone and we need tools in the stream generator,
-        // we use an Arc for tools if we were to make the stream truly independent,
-        // but for now let's just use self if we can or wrap everything in a state.
-        let tools = Arc::new(self.tools.iter().map(|t| {
-            (t.name().to_string(), t.description().to_string(), t.input_schema())
-        }).collect::<Vec<_>>());
+        let tools = self.tools.clone();
         
         let client = self.client.clone();
         
@@ -65,13 +59,13 @@ impl Agent {
                 });
 
                 if !tools.is_empty() {
-                    let tools_json: Vec<Value> = tools.iter().map(|(name, desc, schema)| {
+                    let tools_json: Vec<Value> = tools.iter().map(|t| {
                         json!({
                             "type": "function",
                             "function": {
-                                "name": name,
-                                "description": desc,
-                                "parameters": schema
+                                "name": t.name(),
+                                "description": t.description(),
+                                "parameters": t.input_schema()
                             }
                         })
                     }).collect();
@@ -173,14 +167,10 @@ impl Agent {
                     };
 
                     // Find the tool
-                    // This part is tricky because we need the actual tool objects.
-                    // Let's assume for now we only have the calculator.
-                    // In a generic way, we'd need to pass the tools in.
+                    let tool = tools.iter().find(|t| t.name() == tc.function.name);
                     
-                    let result = if tc.function.name == "calculator" {
-                        use crate::tools::CalculatorTool;
-                        let tool = CalculatorTool;
-                        tool.call(&tc.function.arguments).await.unwrap_or_else(|e| e.to_string())
+                    let result = if let Some(t) = tool {
+                        t.call(&tc.function.arguments).await.unwrap_or_else(|e| format!("Error executing tool: {}", e))
                     } else {
                         format!("Unknown tool: {}", tc.function.name)
                     };

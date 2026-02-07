@@ -18,9 +18,12 @@ async fn main() -> Result<()> {
     let api_key = env::var("OPENROUTER_API_KEY")
         .expect("OPENROUTER_API_KEY must be set in environment or .env file");
     
-    let model = "google/gemini-2.0-flash-001"; // Or any other model
+    let model = "arcee-ai/trinity-large-preview:free"; // Or any other model
     
-    let agent = Agent::new(api_key, model.to_string(), vec![Box::new(CalculatorTool)]);
+    let agent = Agent::new(api_key, model.to_string(), vec![
+        Box::new(CalculatorTool),
+        Box::new(crate::tools::RunCommand),
+    ]);
     
     println!("Agent initialized. Type something (e.g., 'what is 234 + 567?')");
     
