@@ -23,6 +23,7 @@ async fn main() -> Result<()> {
     let agent = Agent::new(api_key, model.to_string(), vec![
         Box::new(CalculatorTool),
         Box::new(crate::tools::RunCommand),
+        Box::new(crate::tools::WebSearchTool),
     ]);
     
     println!("Agent initialized. Type something (e.g., 'what is 234 + 567?')");
