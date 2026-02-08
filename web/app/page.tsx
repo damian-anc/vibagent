@@ -6,11 +6,13 @@ type OutputEvent =
   | { OutputText: string }
   | { OutputToolCall: { id: string; name: string; arguments: string } }
   | { OutputToolCallDelta: string }
-  | { OutputToolResult: { id: string; result: string } };
+  | { OutputToolResult: { id: string; result: string } }
+  | { Error: string };
 
 type Message = {
   role: "user" | "assistant";
   content: string;
+  isError?: boolean;
   toolCalls?: Array<{
     id: string;
     name: string;
@@ -86,6 +88,9 @@ export default function Home() {
                   if (toolCall) {
                     toolCall.result = event.OutputToolResult.result;
                   }
+                } else if ("Error" in event) {
+                  msg.content = event.Error;
+                  msg.isError = true;
                 }
 
                 newMessages[lastIdx] = msg;
@@ -115,7 +120,9 @@ export default function Home() {
           {messages.map((msg, i) => (
             <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
               <div className={`max-w-[85%] rounded-2xl px-4 py-3 shadow-sm ${msg.role === "user"
-                  ? "bg-blue-600 text-white"
+                ? "bg-blue-600 text-white"
+                : msg.isError
+                  ? "bg-red-50 text-red-900 border border-red-200 dark:bg-red-900/20 dark:text-red-200 dark:border-red-900/50"
                   : "bg-white text-zinc-900 dark:bg-zinc-900 dark:text-zinc-100"
                 }`}>
                 <div className="whitespace-pre-wrap">{msg.content}</div>

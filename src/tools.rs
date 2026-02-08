@@ -3,6 +3,8 @@ use async_trait::async_trait;
 use serde_json::{json, Value};
 use std::io::{self, Write};
 use std::process::Command;
+use tracing::warn;
+use std::time::Duration;
 
 #[async_trait]
 pub trait Tool: Send + Sync {
@@ -177,33 +179,54 @@ impl Tool for WebSearchTool {
 
         let client = reqwest::Client::new();
         let url = format!("https://api.search.brave.com/res/v1/web/search?q={}", urlencoding::encode(query));
-        let response = client
-            .get(url)
-            .header("X-Subscription-Token", api_key)
-            .send()
-            .await?;
 
-        if !response.status().is_success() {
-            return Err(anyhow::anyhow!("Brave Search API error: {}", response.status()));
-        }
+        let mut retries = 0;
+        let max_retries = 3;
+        let mut backoff = 1;
 
-        let json: Value = response.json().await?;
-        
-        let mut results_summary = String::new();
-        if let Some(web_results) = json["web"]["results"].as_array() {
-            for (i, result) in web_results.iter().take(5).enumerate() {
-                let title = result["title"].as_str().unwrap_or("No Title");
-                let description = result["description"].as_str().unwrap_or("No Description");
-                let url = result["url"].as_str().unwrap_or("No URL");
-                
-                results_summary.push_str(&format!("{}. {}\n   {}\n   URL: {}\n\n", i + 1, title, description, url));
+        loop {
+            let response = client
+                .get(&url)
+                .header("X-Subscription-Token", &api_key)
+                .send()
+                .await;
+
+            match response {
+                Ok(res) if res.status().is_success() => {
+                    let json: Value = res.json().await?;
+                    
+                    let mut results_summary = String::new();
+                    if let Some(web_results) = json["web"]["results"].as_array() {
+                        for (i, result) in web_results.iter().take(5).enumerate() {
+                            let title = result["title"].as_str().unwrap_or("No Title");
+                            let description = result["description"].as_str().unwrap_or("No Description");
+                            let url = result["url"].as_str().unwrap_or("No URL");
+                            
+                            results_summary.push_str(&format!("{}. {}\n   {}\n   URL: {}\n\n", i + 1, title, description, url));
+                        }
+                    }
+
+                    if results_summary.is_empty() {
+                        return Ok("No results found.".to_string());
+                    } else {
+                        return Ok(format!("Search results for '{}':\n\n{}", query, results_summary));
+                    }
+                }
+                Ok(res) => {
+                    warn!("Brave Search API error: {}. Retrying...", res.status());
+                }
+                Err(e) => {
+                    warn!("Brave Search Network error: {}. Retrying...", e);
+                }
             }
-        }
 
-        if results_summary.is_empty() {
-            Ok("No results found.".to_string())
-        } else {
-            Ok(format!("Search results for '{}':\n\n{}", query, results_summary))
+            if retries >= max_retries {
+                return Err(anyhow::anyhow!("Brave Search failed after retries"));
+            }
+
+            tokio::time::sleep(Duration::from_secs(backoff)).await;
+            retries += 1;
+            backoff *= 2;
         }
     }
 }

@@ -6,6 +6,8 @@ use std::sync::Arc;
 
 use crate::models::{InputEvent, OutputEvent, Message, ToolCall, FunctionCall};
 use crate::tools::Tool;
+use tracing::{error, warn};
+use std::time::Duration;
 
 pub struct Agent {
     api_key: String,
@@ -72,18 +74,48 @@ impl Agent {
                     body["tools"] = json!(tools_json);
                 }
 
-                let response = client.post("https://openrouter.ai/api/v1/chat/completions")
-                    .header("Authorization", format!("Bearer {}", api_key))
-                    .json(&body)
-                    .send()
-                    .await;
+                let mut retries = 0;
+                let max_retries = 3;
+                let mut backoff = 1;
 
-                let res = match response {
-                    Ok(r) => r,
-                    Err(e) => {
-                        println!("Error: {}", e);
-                        break;
+                let res = loop {
+                    let response = client.post("https://openrouter.ai/api/v1/chat/completions")
+                        .header("Authorization", format!("Bearer {}", api_key))
+                        .json(&body)
+                        .send()
+                        .await;
+
+                    match response {
+                        Ok(r) if r.status().is_success() => break Some(r),
+                        Ok(r) => {
+                            let status = r.status();
+                            // Try to read body for error details without consuming it if we need to retry? 
+                            // Actually reqwest response content is stream, so we can't read it easily and then use it again unless we clone?
+                            // But here we are failing, so we don't need the success stream.
+                            let error_text = r.text().await.unwrap_or_default();
+                            warn!("API Error check: Status: {}, Body: {}", status, error_text);
+                            yield OutputEvent::Error(format!("API Error: {}. Retrying...", status));
+                        }
+                        Err(e) => {
+                            warn!("Network Request Error: {}", e);
+                            yield OutputEvent::Error(format!("Network Error: {}. Retrying...", e));
+                        }
                     }
+
+                    if retries >= max_retries {
+                        error!("Max retries reached for LLM API call.");
+                        yield OutputEvent::Error("Max retries reached. Stopping.".to_string());
+                        break None;
+                    }
+
+                    tokio::time::sleep(Duration::from_secs(backoff)).await;
+                    retries += 1;
+                    backoff *= 2;
+                };
+
+                let res = match res {
+                    Some(r) => r,
+                    None => break,
                 };
 
                 let mut stream = res.bytes_stream();
@@ -170,9 +202,20 @@ impl Agent {
                     let tool = tools.iter().find(|t| t.name() == tc.function.name);
                     
                     let result = if let Some(t) = tool {
-                        t.call(&tc.function.arguments).await.unwrap_or_else(|e| format!("Error executing tool: {}", e))
+                        match t.call(&tc.function.arguments).await {
+                            Ok(res) => res,
+                            Err(e) => {
+                                let err_msg = format!("Error executing tool: {}", e);
+                                error!("{}", err_msg);
+                                yield OutputEvent::Error(err_msg.clone());
+                                err_msg
+                            }
+                        }
                     } else {
-                        format!("Unknown tool: {}", tc.function.name)
+                        let err_msg = format!("Unknown tool: {}", tc.function.name);
+                        error!("{}", err_msg);
+                        yield OutputEvent::Error(err_msg.clone());
+                        err_msg
                     };
 
                     current_history.push(Message {

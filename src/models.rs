@@ -14,6 +14,7 @@ pub enum OutputEvent {
         arguments: String,
     },
     OutputToolCallDelta(String),
+    Error(String),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
