@@ -12,9 +12,11 @@ use crate::tools::{CalculatorTool, RunCommand, WebSearchTool};
 
 pub fn app(api_key: String, model: String) -> Router {
     let state = Arc::new(ServerState { api_key, model });
+    let cors = tower_http::cors::CorsLayer::permissive();
     
     Router::new()
         .route("/agent", post(handle_agent_request))
+        .layer(cors)
         .with_state(state)
 }
 
