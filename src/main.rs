@@ -1,54 +1,35 @@
 mod models;
 mod tools;
 mod agent;
+mod server;
 
 use anyhow::Result;
 use dotenv::dotenv;
 use std::env;
-use crate::models::InputEvent;
-use crate::tools::CalculatorTool;
-use crate::agent::Agent;
-use futures::{StreamExt, Stream};
-use std::pin::Pin;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenv().ok();
     
+    // Initialize tracing
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| "vibagent=debug,tower_http=debug".into()))
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
     let api_key = env::var("OPENROUTER_API_KEY")
         .expect("OPENROUTER_API_KEY must be set in environment or .env file");
     
-    let model = "arcee-ai/trinity-large-preview:free"; // Or any other model
+    let model = env::var("AGENT_MODEL")
+        .unwrap_or_else(|_| "arcee-ai/trinity-large-preview:free".to_string());
     
-    let agent = Agent::new(api_key, model.to_string(), vec![
-        Box::new(CalculatorTool),
-        Box::new(crate::tools::RunCommand),
-        Box::new(crate::tools::WebSearchTool),
-    ]);
+    let app = server::app(api_key, model);
     
-    println!("Agent initialized. Type something (e.g., 'what is 234 + 567?')");
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
+    println!("Server running on http://localhost:3000");
+    axum::serve(listener, app).await?;
     
-    let mut input = String::new();
-    std::io::stdin().read_line(&mut input)?;
-    
-    let mut stream: Pin<Box<dyn Stream<Item = crate::models::OutputEvent> + Send>> = agent.run(InputEvent::UserInputEvent(input.trim().to_string())).await?;
-    
-    while let Some(event) = stream.next().await {
-        match event {
-            crate::models::OutputEvent::OutputText(text) => print!("{}", text),
-            crate::models::OutputEvent::OutputToolCall { name, arguments, .. } => {
-                println!("\n[Tool Call: {} with {}]", name, arguments);
-            },
-            crate::models::OutputEvent::OutputToolCallDelta(_delta) => {
-                // For now just ignore deltas or print dots
-                print!(".");
-            }
-        }
-        // Flush stdout to see streaming
-        use std::io::Write;
-        std::io::stdout().flush()?;
-    }
-    
-    println!("\nDone.");
     Ok(())
 }
