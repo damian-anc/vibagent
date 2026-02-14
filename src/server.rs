@@ -8,7 +8,7 @@ use futures::stream::Stream;
 use std::{convert::Infallible, pin::Pin, sync::Arc};
 use crate::agent::Agent;
 use crate::models::InputEvent;
-use crate::tools::{CalculatorTool, RunCommand, WebSearchTool};
+use crate::tools::{CalculatorTool, RunCommand, WebSearchTool, GeocodingTool};
 
 pub fn app(api_key: String, model: String) -> Router {
     let state = Arc::new(ServerState { api_key, model });
@@ -36,6 +36,7 @@ async fn handle_agent_request(
             Box::new(CalculatorTool),
             Box::new(RunCommand),
             Box::new(WebSearchTool),
+            Box::new(GeocodingTool),
         ],
     );
 
