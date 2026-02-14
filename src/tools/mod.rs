@@ -6,11 +6,13 @@ mod calculator;
 mod command;
 mod search;
 mod geocoding;
+mod station_lookup;
 
 pub use calculator::CalculatorTool;
 pub use command::RunCommand;
 pub use search::WebSearchTool;
 pub use geocoding::GeocodingTool;
+pub use station_lookup::StationLookupTool;
 
 #[async_trait]
 pub trait Tool: Send + Sync {

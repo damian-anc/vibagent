@@ -22,13 +22,23 @@ stations_df['elev'] = pd.to_numeric(stations_df['elev'], errors='coerce')
 # Connect to DuckDB and create .db
 con = duckdb.connect('data/ghcnd_stations.db')
 
+# Install and load the spatial extension
+con.execute("INSTALL spatial;")
+con.execute("LOAD spatial;")
+
 # Create table and insert data
 con.execute("DROP TABLE IF EXISTS ghcnd_stations")
 con.execute("CREATE TABLE ghcnd_stations AS SELECT * FROM stations_df")
 
-# Optional: create an index on lat/lon for faster nearest-neighbor queries
-# DuckDB supports functional indexing for simple use:
-con.execute("CREATE INDEX idx_lat_lon ON ghcnd_stations(lat, lon)")
+# Add a geometry column and populate it
+con.execute("ALTER TABLE ghcnd_stations ADD COLUMN geom GEOMETRY")
+con.execute("UPDATE ghcnd_stations SET geom = ST_Point(lon, lat)")
+
+# Create a spatial index
+# Note: DuckDB's native spatial index support is via the spatial extension
+# We use ST_Point and ST_Distance_Sphere in queries.
+# Creating a standard index on the geom column might help depending on the version.
+con.execute("CREATE INDEX idx_geom ON ghcnd_stations(geom)")
 
 # Close the connection
 con.close()
