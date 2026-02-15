@@ -138,6 +138,10 @@ impl Agent {
                 let mut stream = res.bytes_stream();
                 let mut full_content = String::new();
                 let mut tool_calls_accum: Vec<ToolCallAccum> = Vec::new();
+                // Map from (backend_stream_index) -> (internal_accum_index)
+                let mut index_map: std::collections::HashMap<usize, usize> = std::collections::HashMap::new();
+                // Track the most recently modified tool call index to handle orphaned chunks
+                let mut last_active_index: Option<usize> = None;
 
                 while let Some(chunk_result) = stream.next().await {
                     let chunk = match chunk_result {
@@ -163,23 +167,86 @@ impl Agent {
                                     
                                     if let Some(tool_calls) = delta.get("tool_calls").and_then(|tc| tc.as_array()) {
                                         for tc in tool_calls {
-                                            let index = tc["index"].as_u64().unwrap_or(0) as usize;
-                                            if index >= tool_calls_accum.len() {
+                                            let stream_index = tc["index"].as_u64().unwrap_or(0) as usize;
+                                            
+                                            // Determine the internal index for this tool call
+                                            let internal_index = if let Some(id) = tc["id"].as_str() {
+                                                // START of a new tool call logic (or re-identification)
+                                                // Check if stream_index is already mapped
+                                                if let Some(&mapped_idx) = index_map.get(&stream_index) {
+                                                    // Stream index mapped. Check for ID conflict.
+                                                    if let Some(existing_id) = &tool_calls_accum.get(mapped_idx).and_then(|t| t.id.as_ref()) {
+                                                        if *existing_id != id {
+                                                             // Collision on stream index with different ID -> New tool call
+                                                             let new_index = tool_calls_accum.len();
+                                                             tool_calls_accum.push(ToolCallAccum::default());
+                                                             index_map.insert(stream_index, new_index);
+                                                             new_index
+                                                        } else {
+                                                             // Same ID, reuse existing index
+                                                             mapped_idx
+                                                        }
+                                                    } else {
+                                                        // Existing has no ID? Bind it now.
+                                                        mapped_idx 
+                                                    }
+                                                } else {
+                                                    // Stream index NOT mapped.
+                                                    // Check if this ID exists anywhere in accum (Merging split streams)
+                                                    if let Some(existing_idx) = tool_calls_accum.iter().position(|t| t.id.as_deref() == Some(id)) {
+                                                        // Found existing tool call with same ID. Bind this new stream index to it.
+                                                        index_map.insert(stream_index, existing_idx);
+                                                        existing_idx
+                                                    } else {
+                                                        // New ID, New Index -> New Tool Call
+                                                        let new_index = tool_calls_accum.len();
+                                                        tool_calls_accum.push(ToolCallAccum::default());
+                                                        index_map.insert(stream_index, new_index);
+                                                        new_index
+                                                    }
+                                                }
+                                            } else {
+                                                // CONTINUATION logic (No ID)
+                                                if let Some(&idx) = index_map.get(&stream_index) {
+                                                    // Known stream index -> use mapped internal index
+                                                    idx
+                                                } else {
+                                                    // Unknown stream index AND no ID.
+                                                    // Heuristic: If we have an active tool call, assume it belongs to that.
+                                                    if let Some(active_idx) = last_active_index {
+                                                        // Map this new rogue stream index to the active internal index
+                                                        index_map.insert(stream_index, active_idx);
+                                                        active_idx
+                                                    } else {
+                                                        // No active tool call? Fallback to new.
+                                                        let new_index = tool_calls_accum.len();
+                                                        tool_calls_accum.push(ToolCallAccum::default());
+                                                        index_map.insert(stream_index, new_index);
+                                                        new_index
+                                                    }
+                                                }
+                                            };
+                                            
+                                            // Update last active index for future heuristic use
+                                            last_active_index = Some(internal_index);
+
+                                            // Ensure we have space (redundant check but safe)
+                                            while internal_index >= tool_calls_accum.len() {
                                                 tool_calls_accum.push(ToolCallAccum::default());
                                             }
                                             
                                             if let Some(id) = tc["id"].as_str() {
-                                                tool_calls_accum[index].id = Some(id.to_string());
+                                                tool_calls_accum[internal_index].id = Some(id.to_string());
                                             }
                                             if let Some(name) = tc["function"]["name"].as_str() {
-                                                tool_calls_accum[index].name.push_str(name);
+                                                tool_calls_accum[internal_index].name.push_str(name);
                                             }
                                             if let Some(args) = tc["function"]["arguments"].as_str() {
-                                                tool_calls_accum[index].arguments.push_str(args);
+                                                tool_calls_accum[internal_index].arguments.push_str(args);
                                             }
                                             
                                             yield OutputEvent::OutputToolCallDelta {
-                                                index,
+                                                index: internal_index,
                                                 id: tc["id"].as_str().map(|s| s.to_string()),
                                                 name: tc["function"]["name"].as_str().map(|s| s.to_string()),
                                                 arguments: tc["function"]["arguments"].as_str().map(|s| s.to_string()),
@@ -260,8 +327,7 @@ impl Agent {
                         tool_calls: None,
                         tool_call_id: Some(tc.id),
                     });
-                }
-                
+                }                
                 // Refresh messages for next LLM iteration
                 messages_for_llm = vec![Message {
                     role: "system".to_string(),

@@ -62,7 +62,7 @@ export default function Home() {
     setIsStreaming(true);
 
     try {
-      const response = await fetch("http://localhost:3000/agent", {
+      const response = await fetch("http://localhost:3001/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ UserInputEvent: input }),
@@ -72,7 +72,7 @@ export default function Home() {
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      let assistantMessage: Message = { role: "assistant", content: "" };
+      const assistantMessage: Message = { role: "assistant", content: "" };
 
       setMessages((prev) => [...prev, assistantMessage]);
 
@@ -240,10 +240,10 @@ export default function Home() {
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-xl font-bold font-mono text-zinc-900 dark:text-zinc-100">{selectedToolCall.name}</h3>
                   <span className={`px-2 py-1 rounded text-xs font-semibold ${selectedToolCall.isError
-                      ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"
-                      : selectedToolCall.result
-                        ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"
-                        : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                    ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"
+                    : selectedToolCall.result
+                      ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"
+                      : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
                     }`}>
                     {selectedToolCall.isError ? "Error" : selectedToolCall.result ? "Completed" : "Running"}
                   </span>
@@ -261,8 +261,8 @@ export default function Home() {
                     <div>
                       <h4 className="text-sm font-semibold text-zinc-500 uppercase tracking-wider mb-2">Result</h4>
                       <pre className={`p-4 rounded-lg overflow-x-auto text-sm font-mono whitespace-pre-wrap break-all ${selectedToolCall.isError
-                          ? "bg-red-50 border border-red-100 text-red-700 dark:bg-red-900/10 dark:border-red-900/30 dark:text-red-300"
-                          : "bg-zinc-50 border border-zinc-100 text-zinc-700 dark:bg-zinc-950 dark:border-zinc-800 dark:text-zinc-300"
+                        ? "bg-red-50 border border-red-100 text-red-700 dark:bg-red-900/10 dark:border-red-900/30 dark:text-red-300"
+                        : "bg-zinc-50 border border-zinc-100 text-zinc-700 dark:bg-zinc-950 dark:border-zinc-800 dark:text-zinc-300"
                         }`}>
                         {selectedToolCall.result}
                       </pre>
@@ -290,10 +290,10 @@ export default function Home() {
                         {tc.name}
                       </span>
                       <span className={`h-2 w-2 rounded-full ${tc.isError
-                          ? "bg-red-500"
-                          : tc.result
-                            ? "bg-green-500"
-                            : "bg-blue-500 animate-pulse"
+                        ? "bg-red-500"
+                        : tc.result
+                          ? "bg-green-500"
+                          : "bg-blue-500 animate-pulse"
                         }`} />
                     </div>
                     <div className="text-xs text-zinc-500 line-clamp-2 font-mono break-all">

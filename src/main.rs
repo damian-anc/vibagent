@@ -44,16 +44,17 @@ async fn main() -> Result<()> {
     let api_key = env::var("OPENROUTER_API_KEY")
         .expect("OPENROUTER_API_KEY must be set in environment or .env file");
     
-//    let default_model = "arcee-ai/trinity-large-preview:free".to_string();
-    let default_model = "z-ai/glm-4.5-air:free".to_string();  
+//    let default_model = "arcee-ai/trinity-large-preview:free";
+    //let default_model = "z-ai/glm-4.5-air:free";
+    let default_model = "qwen/qwen3-235b-a22b-thinking-2507";
 
     let model = env::var("AGENT_MODEL")
-        .unwrap_or_else(|_| default_model);
+        .unwrap_or_else(|_| default_model.to_string());
     
     let app = server::app(api_key, model);
     
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
-    tracing::info!("Server running on http://localhost:3000");
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3001").await?;
+    tracing::info!("Server running on http://localhost:3001");
     axum::serve(listener, app).await?;
     
     Ok(())

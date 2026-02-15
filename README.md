@@ -63,28 +63,28 @@ You need to run both the backend and the frontend.
 **1. Start the Backend Server**
 ```bash
 # In the project root
-cargo run --bin vibagent
+cargo run
 
 # Start with verbose logging
-cargo run --bin vibagent -- -v
+cargo run -- -v
 ```
-The server will start on `http://localhost:3000`.
+The server will start on `http://localhost:3001`.
 
 **2. Start the Frontend**
 ```bash
 # In a new terminal, navigate to the web directory
 cd web
 npm install
-npm run dev -- -p 3001
+npm run dev
 ```
-The web interface will be available at `http://localhost:3001`.
+The web interface will be available at `http://localhost:3000`.
 
 ## 🔌 API Usage
 
 You can also interact with the agent directly via the API:
 
 ```bash
-curl -N -X POST http://localhost:3000/agent \
+curl -N -X POST http://localhost:3001/agent \
   -H "Content-Type: application/json" \
   -d '{"UserInputEvent": "Calculate 123 + 456"}'
 ```

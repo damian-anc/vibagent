@@ -12,9 +12,9 @@ The backend is a Rust application located in the root directory.
     ```
 2.  Run the application:
     ```bash
-    cargo run --bin vibagent
+    cargo run
     ```
-    The server will start at [http://localhost:3000](http://localhost:3000).
+    The server will start at [http://localhost:3001](http://localhost:3001).
 
 ## Frontend (Next.js)
 
@@ -32,4 +32,4 @@ The frontend is a Next.js application located in the `web` directory.
     ```bash
     npm run dev
     ```
-    The frontend will typically be available at [http://localhost:3001](http://localhost:3001) (or port 3000 if available).
+    The frontend will typically be available at [http://localhost:3000](http://localhost:3000).
