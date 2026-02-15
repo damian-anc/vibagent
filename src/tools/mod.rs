@@ -7,12 +7,14 @@ mod command;
 mod search;
 mod geocoding;
 mod station_lookup;
+mod climate_data;
 
 pub use calculator::CalculatorTool;
 pub use command::RunCommand;
 pub use search::WebSearchTool;
 pub use geocoding::GeocodingTool;
 pub use station_lookup::StationLookupTool;
+pub use climate_data::ClimateDataTool;
 
 #[async_trait]
 pub trait Tool: Send + Sync {
