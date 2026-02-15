@@ -158,8 +158,14 @@ impl Agent {
                                             }
                                             if let Some(args) = tc["function"]["arguments"].as_str() {
                                                 tool_calls_accum[index].arguments.push_str(args);
-                                                yield OutputEvent::OutputToolCallDelta(args.to_string());
                                             }
+                                            
+                                            yield OutputEvent::OutputToolCallDelta {
+                                                index,
+                                                id: tc["id"].as_str().map(|s| s.to_string()),
+                                                name: tc["function"]["name"].as_str().map(|s| s.to_string()),
+                                                arguments: tc["function"]["arguments"].as_str().map(|s| s.to_string()),
+                                            };
                                         }
                                     }
                                 }
@@ -201,21 +207,25 @@ impl Agent {
                     // Find the tool
                     let tool = tools.iter().find(|t| t.name() == tc.function.name);
                     
-                    let result = if let Some(t) = tool {
+                    let (result, is_error) = if let Some(t) = tool {
                         match t.call(&tc.function.arguments).await {
-                            Ok(res) => res,
+                            Ok(res) => (res, false),
                             Err(e) => {
                                 let err_msg = format!("Error executing tool: {}", e);
                                 error!("{}", err_msg);
-                                yield OutputEvent::Error(err_msg.clone());
-                                err_msg
+                                (err_msg, true)
                             }
                         }
                     } else {
                         let err_msg = format!("Unknown tool: {}", tc.function.name);
                         error!("{}", err_msg);
-                        yield OutputEvent::Error(err_msg.clone());
-                        err_msg
+                        (err_msg, true)
+                    };
+
+                    yield OutputEvent::OutputToolResult {
+                        id: tc.id.clone(),
+                        result: result.clone(),
+                        is_error,
                     };
 
                     current_history.push(Message {

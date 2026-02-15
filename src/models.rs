@@ -13,7 +13,17 @@ pub enum OutputEvent {
         name: String,
         arguments: String,
     },
-    OutputToolCallDelta(String),
+    OutputToolCallDelta {
+        index: usize,
+        id: Option<String>,
+        name: Option<String>,
+        arguments: Option<String>,
+    },
+    OutputToolResult {
+        id: String,
+        result: String,
+        is_error: bool,
+    },
     Error(String),
 }
 

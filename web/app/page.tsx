@@ -5,8 +5,8 @@ import { useState, useRef, useEffect } from "react";
 type OutputEvent =
   | { OutputText: string }
   | { OutputToolCall: { id: string; name: string; arguments: string } }
-  | { OutputToolCallDelta: string }
-  | { OutputToolResult: { id: string; result: string } }
+  | { OutputToolCallDelta: { index: number; id?: string; name?: string; arguments?: string } }
+  | { OutputToolResult: { id: string; result: string; is_error: boolean } }
   | { Error: string };
 
 type Message = {
@@ -18,6 +18,7 @@ type Message = {
     name: string;
     arguments: string;
     result?: string;
+    isError?: boolean;
   }>;
 };
 
@@ -78,15 +79,44 @@ export default function Home() {
                   msg.content += event.OutputText;
                 } else if ("OutputToolCall" in event) {
                   if (!msg.toolCalls) msg.toolCalls = [];
-                  msg.toolCalls.push({
-                    id: event.OutputToolCall.id,
-                    name: event.OutputToolCall.name,
-                    arguments: event.OutputToolCall.arguments,
-                  });
+                  const existingIdx = msg.toolCalls.findIndex(tc => tc.id === event.OutputToolCall.id);
+
+                  if (existingIdx !== -1) {
+                    msg.toolCalls[existingIdx] = {
+                      ...msg.toolCalls[existingIdx],
+                      name: event.OutputToolCall.name,
+                      arguments: event.OutputToolCall.arguments,
+                    };
+                  } else {
+                    msg.toolCalls.push({
+                      id: event.OutputToolCall.id,
+                      name: event.OutputToolCall.name,
+                      arguments: event.OutputToolCall.arguments,
+                    });
+                  }
+                } else if ("OutputToolCallDelta" in event) {
+                  if (!msg.toolCalls) msg.toolCalls = [];
+                  const delta = event.OutputToolCallDelta;
+                  const index = delta.index;
+
+                  // Ensure tool call exists at index
+                  if (!msg.toolCalls[index]) {
+                    msg.toolCalls[index] = {
+                      id: delta.id || "",
+                      name: delta.name || "",
+                      arguments: delta.arguments || "",
+                    };
+                  } else {
+                    // Update existing
+                    if (delta.id) msg.toolCalls[index].id = delta.id;
+                    if (delta.name) msg.toolCalls[index].name += delta.name;
+                    if (delta.arguments) msg.toolCalls[index].arguments += delta.arguments;
+                  }
                 } else if ("OutputToolResult" in event) {
                   const toolCall = msg.toolCalls?.find(tc => tc.id === event.OutputToolResult.id);
                   if (toolCall) {
                     toolCall.result = event.OutputToolResult.result;
+                    toolCall.isError = event.OutputToolResult.is_error;
                   }
                 } else if ("Error" in event) {
                   msg.content = event.Error;
@@ -131,15 +161,15 @@ export default function Home() {
                   <div className="mt-3 space-y-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">
                     {msg.toolCalls.map((tc, j) => (
                       <div key={j} className="rounded-lg bg-zinc-50 p-3 text-sm dark:bg-zinc-800/50">
-                        <div className="flex items-center gap-2 font-mono font-medium text-blue-600 dark:text-blue-400">
-                          <span className="h-2 w-2 rounded-full bg-blue-600 animate-pulse" />
-                          Tool Call: {tc.name}
+                        <div className={`flex items-center gap-2 font-mono font-medium ${tc.isError ? "text-red-600 dark:text-red-400" : "text-blue-600 dark:text-blue-400"}`}>
+                          <span className={`h-2 w-2 rounded-full animate-pulse ${tc.isError ? "bg-red-600" : "bg-blue-600"}`} />
+                          Tool Call: {tc.name} {tc.isError && "(Failed)"}
                         </div>
                         <div className="mt-1 text-zinc-500 line-clamp-2">{tc.arguments}</div>
                         {tc.result && (
-                          <div className="mt-2 border-t border-zinc-200 pt-2 dark:border-zinc-700">
-                            <div className="font-semibold text-zinc-700 dark:text-zinc-300">Result:</div>
-                            <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap text-zinc-600 dark:text-zinc-400 font-mono text-xs">
+                          <div className={`mt-2 border-t pt-2 ${tc.isError ? "border-red-200 dark:border-red-800" : "border-zinc-200 dark:border-zinc-700"}`}>
+                            <div className={`font-semibold ${tc.isError ? "text-red-700 dark:text-red-300" : "text-zinc-700 dark:text-zinc-300"}`}>Result:</div>
+                            <pre className={`mt-1 max-h-40 overflow-auto whitespace-pre-wrap font-mono text-xs ${tc.isError ? "text-red-600 dark:text-red-400" : "text-zinc-600 dark:text-zinc-400"}`}>
                               {tc.result}
                             </pre>
                           </div>
