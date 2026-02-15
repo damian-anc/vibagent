@@ -9,6 +9,7 @@ use std::{convert::Infallible, pin::Pin, sync::Arc};
 use crate::agent::Agent;
 use crate::models::InputEvent;
 use crate::tools::{CalculatorTool, RunCommand, WebSearchTool, GeocodingTool, StationLookupTool, ClimateDataTool};
+use tracing::info;
 
 pub fn app(api_key: String, model: String) -> Router {
     let state = Arc::new(ServerState { api_key, model });
@@ -29,6 +30,8 @@ async fn handle_agent_request(
     axum::extract::State(state): axum::extract::State<Arc<ServerState>>,
     Json(input): Json<InputEvent>,
 ) -> Sse<Pin<Box<dyn Stream<Item = Result<Event, Infallible>> + Send>>> {
+    info!("Handling agent request: {:?}", input);
+    
     let agent = Agent::new(
         state.api_key.clone(),
         state.model.clone(),

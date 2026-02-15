@@ -12,6 +12,7 @@ VibAgent is a powerful, Rust-based AI agent designed to perform tasks using a su
     -   **Web Search**: Search the internet for real-time information.
     -   **Command Runner**: Execute terminal commands (sandboxed/safe mode recommended).
 -   **HTTP API**: Exposes a streaming API (`POST /agent`) using `Axum` and Server-Sent Events (SSE).
+-   **Structured Logging**: Comprehensive tracing with `INFO` and `DEBUG` levels to monitor requests and tool execution.
 -   **Modern Frontend**: A premium Next.js web interface for interacting with the agent.
     -   Real-time text streaming.
     -   Visualized tool calls and results.
@@ -62,7 +63,10 @@ You need to run both the backend and the frontend.
 **1. Start the Backend Server**
 ```bash
 # In the project root
-cargo run
+cargo run --bin vibagent
+
+# Start with verbose logging
+cargo run --bin vibagent -- -v
 ```
 The server will start on `http://localhost:3000`.
 

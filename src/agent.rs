@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use crate::models::{InputEvent, OutputEvent, Message, ToolCall, FunctionCall};
 use crate::tools::Tool;
-use tracing::{error, warn};
+use tracing::{error, warn, info, debug};
 use std::time::Duration;
 
 pub struct Agent {
@@ -33,6 +33,7 @@ impl Agent {
         
         match event {
             InputEvent::UserInputEvent(text) => {
+                info!("User input received: {}", text);
                 history.push(Message {
                     role: "user".to_string(),
                     content: Some(text),
@@ -79,6 +80,7 @@ impl Agent {
                 let mut backoff = 1;
 
                 let res = loop {
+                    debug!("Sending request to OpenRouter API (try {})", retries + 1);
                     let response = client.post("https://openrouter.ai/api/v1/chat/completions")
                         .header("Authorization", format!("Bearer {}", api_key))
                         .json(&body)
@@ -86,7 +88,10 @@ impl Agent {
                         .await;
 
                     match response {
-                        Ok(r) if r.status().is_success() => break Some(r),
+                        Ok(r) if r.status().is_success() => {
+                            debug!("Successfully received response from OpenRouter");
+                            break Some(r)
+                        },
                         Ok(r) => {
                             let status = r.status();
                             // Try to read body for error details without consuming it if we need to retry? 
@@ -129,6 +134,7 @@ impl Agent {
                     };
                     
                     let text = String::from_utf8_lossy(&chunk);
+                    debug!("Received chunk: {}", text);
                     for line in text.lines() {
                         if line.starts_with("data: ") {
                             let data = &line[6..];
@@ -176,6 +182,7 @@ impl Agent {
 
                 // If no tool calls, we are done
                 if tool_calls_accum.is_empty() {
+                    info!("Assistant response complete (no tool calls)");
                     break;
                 }
 
@@ -189,6 +196,8 @@ impl Agent {
                     },
                 }).collect();
 
+                info!("Assistant requested {} tool calls", assistant_tool_calls.len());
+
                 current_history.push(Message {
                     role: "assistant".to_string(),
                     content: if full_content.is_empty() { None } else { Some(full_content.clone()) },
@@ -198,6 +207,7 @@ impl Agent {
 
                 // Execute tool calls and add results to history
                 for tc in assistant_tool_calls {
+                    info!("Executing tool: {} with arguments: {}", tc.function.name, tc.function.arguments);
                     yield OutputEvent::OutputToolCall {
                         id: tc.id.clone(),
                         name: tc.function.name.clone(),
@@ -209,7 +219,11 @@ impl Agent {
                     
                     let (result, is_error) = if let Some(t) = tool {
                         match t.call(&tc.function.arguments).await {
-                            Ok(res) => (res, false),
+                            Ok(res) => {
+                                info!("Tool {} executed successfully", tc.function.name);
+                                debug!("Tool result: {}", res);
+                                (res, false)
+                            },
                             Err(e) => {
                                 let err_msg = format!("Error executing tool: {}", e);
                                 error!("{}", err_msg);
