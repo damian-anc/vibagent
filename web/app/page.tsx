@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 type OutputEvent =
   | { OutputText: string }
@@ -155,7 +157,11 @@ export default function Home() {
                   ? "bg-red-50 text-red-900 border border-red-200 dark:bg-red-900/20 dark:text-red-200 dark:border-red-900/50"
                   : "bg-white text-zinc-900 dark:bg-zinc-900 dark:text-zinc-100"
                 }`}>
-                <div className="whitespace-pre-wrap">{msg.content}</div>
+                <div className="prose prose-zinc dark:prose-invert max-w-none">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {msg.content}
+                  </ReactMarkdown>
+                </div>
 
                 {msg.toolCalls && msg.toolCalls.length > 0 && (
                   <div className="mt-3 space-y-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">

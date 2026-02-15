@@ -32,15 +32,20 @@ async fn handle_agent_request(
 ) -> Sse<Pin<Box<dyn Stream<Item = Result<Event, Infallible>> + Send>>> {
     info!("Handling agent request: {:?}", input);
     
+    let system_prompt = std::fs::read_to_string("src/system_prompt.md").unwrap_or_default();
+    let schema_info = std::fs::read_to_string("docs/climate_data_schema.md").unwrap_or_default();
+    let combined_prompt = format!("{}\n\n{}", system_prompt, schema_info);
+
     let agent = Agent::new(
         state.api_key.clone(),
         state.model.clone(),
+        combined_prompt,
         vec![
             Box::new(CalculatorTool),
             Box::new(RunCommand),
             Box::new(WebSearchTool),
             Box::new(GeocodingTool),
-            Box::new(StationLookupTool::new("data/ghcnd_stations.db")),
+            Box::new(StationLookupTool::new("data/ghcnd_stations.db", "/Volumes/Data/ghcn-data", "data/climate_data.db")),
             Box::new(ClimateDataTool::new("data/climate_data.db", "/Volumes/Data/ghcn-data")),
         ],
     );

@@ -3,7 +3,7 @@ use tokio;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let tool = StationLookupTool::new("data/ghcnd_stations.db");
+    let tool = StationLookupTool::new("data/ghcnd_stations.db", "/Volumes/Data/ghcn-data", "data/climate_data.db");
     
     let args = r#"{"lat": 37.7749, "lon": -122.4194}"#;
     println!("Calling station_lookup with args: {}", args);

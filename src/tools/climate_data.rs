@@ -6,7 +6,7 @@ use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
 use sqlparser::ast::{Statement, TableFactor};
 use std::collections::HashSet;
-use std::path::Path;
+use super::common;
 use super::Tool;
 
 pub struct ClimateDataTool {
@@ -69,33 +69,8 @@ impl ClimateDataTool {
             _ => {}
         }
     }
-
-    fn ensure_data_loaded(&self, conn: &Connection, station_id: &str) -> Result<()> {
-        // Check if table exists
-        let table_exists: bool = conn.query_row(
-            "SELECT count(*) > 0 FROM information_schema.tables WHERE table_name = ?",
-            [station_id],
-            |row| row.get(0),
-        )?;
-
-        if !table_exists {
-            let csv_path = format!("{}/{}.csv", self.data_dir, station_id);
-            if Path::new(&csv_path).exists() {
-                // DuckDB can read GHCND daily format if it's standard CSV.
-                // If it's the fixed-width format, we'd need more complex loading.
-                // Assuming standard CSV as per request "WA003475270.csv".
-                conn.execute(
-                    &format!(
-                        "CREATE TABLE \"{}\" AS SELECT * FROM read_csv_auto('{}')",
-                        station_id, csv_path
-                    ),
-                    [],
-                ).context(format!("Failed to load CSV for station {}", station_id))?;
-            }
-        }
-        Ok(())
-    }
 }
+
 
 #[async_trait]
 impl Tool for ClimateDataTool {
@@ -136,7 +111,7 @@ impl Tool for ClimateDataTool {
         };
 
         for id in station_ids {
-            self.ensure_data_loaded(&conn, &id)?;
+            common::ensure_station_data_loaded(&conn, &self.data_dir, &id)?;
         }
 
         let mut stmt = conn.prepare(query)?;

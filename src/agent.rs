@@ -12,16 +12,18 @@ use std::time::Duration;
 pub struct Agent {
     api_key: String,
     model: String,
+    system_prompt: String,
     tools: Arc<Vec<Box<dyn Tool>>>,
     history: Vec<Message>,
     client: Client,
 }
 
 impl Agent {
-    pub fn new(api_key: String, model: String, tools: Vec<Box<dyn Tool>>) -> Self {
+    pub fn new(api_key: String, model: String, system_prompt: String, tools: Vec<Box<dyn Tool>>) -> Self {
         Self {
             api_key,
             model,
+            system_prompt,
             tools: Arc::new(tools),
             history: Vec::new(),
             client: Client::new(),
@@ -45,6 +47,7 @@ impl Agent {
 
         let api_key = self.api_key.clone();
         let model = self.model.clone();
+        let system_prompt = self.system_prompt.clone();
         let tools = self.tools.clone();
         
         let client = self.client.clone();
@@ -54,10 +57,19 @@ impl Agent {
         let stream = async_stream::stream! {
             let mut current_history = history;
             
+            // Add system prompt to the beginning of history for the LLM request
+            let mut messages_for_llm = vec![Message {
+                role: "system".to_string(),
+                content: Some(system_prompt.clone()),
+                tool_calls: None,
+                tool_call_id: None,
+            }];
+            messages_for_llm.extend(current_history.clone());
+
             loop {
                 let mut body = json!({
                     "model": model,
-                    "messages": current_history,
+                    "messages": messages_for_llm,
                     "stream": true,
                 });
 
@@ -249,6 +261,15 @@ impl Agent {
                         tool_call_id: Some(tc.id),
                     });
                 }
+                
+                // Refresh messages for next LLM iteration
+                messages_for_llm = vec![Message {
+                    role: "system".to_string(),
+                    content: Some(system_prompt.clone()),
+                    tool_calls: None,
+                    tool_call_id: None,
+                }];
+                messages_for_llm.extend(current_history.clone());
                 
                 // Loop continues to call LLM again with tool results
             }
